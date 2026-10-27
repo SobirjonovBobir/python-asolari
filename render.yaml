@@ -1,0 +1,32 @@
+# Render Blueprint — https://dashboard.render.com/blueprints
+services:
+  - type: web
+    name: python-asolari
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements-postgres.txt
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHONPATH
+        value: .
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        value: admin123
+      - key: DATABASE_URL
+        fromDatabase:
+          name: python-asolari-db
+          property: connectionString
+      - key: CORS_ORIGINS
+        value: "*"
+
+databases:
+  - name: python-asolari-db
+    plan: free
+    databaseName: python_course
+    user: python

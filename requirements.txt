@@ -1,0 +1,2 @@
+# Render / PaaS root install
+-r backend/requirements.txt

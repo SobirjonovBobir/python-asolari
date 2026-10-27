@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kirish — Python asoslari</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .auth-wrap {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #d8efe8 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #e8f3ff 0%, transparent 50%),
+        var(--bg);
+    }
+    .auth-card {
+      width: min(420px, 100%);
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 28px 26px;
+      box-shadow: 0 12px 40px rgba(20, 40, 35, 0.08);
+    }
+    .auth-card h1 {
+      margin: 0 0 6px;
+      font-size: 22px;
+      letter-spacing: -0.02em;
+    }
+    .auth-card .sub {
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .auth-card label {
+      display: block;
+      font-size: 13px;
+      margin: 0 0 6px;
+      color: var(--accent-2);
+      font-weight: 600;
+    }
+    .auth-card input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 11px 12px;
+      font: inherit;
+      margin-bottom: 14px;
+      background: #fff;
+    }
+    .auth-card button {
+      width: 100%;
+      margin-top: 6px;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px;
+      font: inherit;
+      font-weight: 650;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+    }
+    .auth-err {
+      display: none;
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #fde8e8;
+      color: #8a1f1f;
+      font-size: 13px;
+    }
+    .auth-err.show { display: block; }
+    .hint {
+      margin: 16px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-wrap">
+    <form class="auth-card" id="login-form">
+      <h1>Python asoslari</h1>
+      <p class="sub">Hisob faqat admin tomonidan ochiladi. Login va parolingizni kiriting.</p>
+      <div class="auth-err" id="err"></div>
+      <label for="username">Login</label>
+      <input id="username" name="username" autocomplete="username" required />
+      <label for="password">Parol</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required />
+      <button type="submit">Kirish</button>
+      <p class="hint">Admin birinchi marta: login <code>admin</code>, parol <code>admin123</code> (keyin .env da o‘zgartiring).</p>
+    </form>
+  </div>
+  <script src="js/api.js"></script>
+  <script>
+    if (API.token()) {
+      const u = API.user();
+      location.href = u && u.role === "admin" ? "/admin" : "/";
+    }
+    const err = document.getElementById("err");
+    document.getElementById("login-form").onsubmit = async (e) => {
+      e.preventDefault();
+      err.classList.remove("show");
+      try {
+        const data = await API.login(
+          document.getElementById("username").value.trim(),
+          document.getElementById("password").value
+        );
+        API.setSession(data);
+        location.href = data.role === "admin" ? "/admin" : "/";
+      } catch (ex) {
+        err.textContent = ex.message || "Kirish amalga oshmadi";
+        err.classList.add("show");
+      }
+    };
+  </script>
+</body>
+</html>

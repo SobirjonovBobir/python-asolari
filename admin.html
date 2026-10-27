@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin — Python asoslari</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .admin-page { max-width: 920px; margin: 0 auto; padding: 28px 20px 60px; }
+    .admin-top { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 22px; }
+    .admin-top h1 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
+    .admin-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .admin-actions a, .admin-actions button {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 10px;
+      padding: 9px 14px;
+      font: inherit;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+    }
+    .admin-actions .primary { background: var(--accent); color: #fff; border-color: transparent; font-weight: 650; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end; }
+    @media (max-width: 700px) { .form-row { grid-template-columns: 1fr; } }
+    .form-row label { display: block; font-size: 12px; font-weight: 650; color: var(--accent-2); margin-bottom: 5px; }
+    .form-row input {
+      width: 100%; box-sizing: border-box; border: 1px solid var(--line);
+      border-radius: 10px; padding: 10px 12px; font: inherit;
+    }
+    .msg { margin: 10px 0 0; font-size: 13px; }
+    .msg.ok { color: #1b6b45; }
+    .msg.err { color: #8a1f1f; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #eef6f3; }
+    .badge.admin { background: #e8eefc; }
+    .badge.off { background: #fde8e8; color: #8a1f1f; }
+  </style>
+</head>
+<body>
+  <div class="admin-page">
+    <div class="admin-top">
+      <div>
+        <h1>Admin panel</h1>
+        <p id="who" style="margin:6px 0 0;color:var(--muted);font-size:14px;"></p>
+      </div>
+      <div class="admin-actions">
+        <a href="/">Kursga</a>
+        <button type="button" id="logout">Chiqish</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 12px;">Yangi foydalanuvchi ochish</h3>
+      <p style="margin:0 0 14px;color:var(--muted);font-size:14px;">Ochiq ro‘yxatdan o‘tish yo‘q — faqat admin ochadi.</p>
+      <form id="create-form" class="form-row">
+        <div>
+          <label for="new-user">Login</label>
+          <input id="new-user" required minlength="2" />
+        </div>
+        <div>
+          <label for="new-pass">Parol</label>
+          <input id="new-pass" type="password" required minlength="4" />
+        </div>
+        <button type="submit" class="primary">Ochish</button>
+      </form>
+      <p class="msg" id="create-msg"></p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 12px;">Foydalanuvchilar</h3>
+      <table class="method-table">
+        <thead>
+          <tr><th>ID</th><th>Login</th><th>Rol</th><th>Progress</th><th>Holat</th><th></th></tr>
+        </thead>
+        <tbody id="users-body"></tbody>
+      </table>
+    </div>
+  </div>
+  <script src="js/api.js"></script>
+  <script>
+    const u = API.user();
+    if (!API.token() || !u || u.role !== "admin") {
+      location.href = "/login";
+    }
+    document.getElementById("who").textContent = "Kirgan: " + (u && u.username);
+    document.getElementById("logout").onclick = () => {
+      API.clearSession();
+      location.href = "/login";
+    };
+
+    const msg = document.getElementById("create-msg");
+    async function loadUsers() {
+      const list = await API.listUsers();
+      const body = document.getElementById("users-body");
+      body.innerHTML = list
+        .map((row) => {
+          const role = row.role === "admin" ? '<span class="badge admin">admin</span>' : '<span class="badge">user</span>';
+          const st = row.is_active ? "faol" : '<span class="badge off">o‘chiq</span>';
+          const btn =
+            row.role === "admin"
+              ? ""
+              : `<button type="button" data-id="${row.id}" data-active="${row.is_active ? "0" : "1"}">${
+                  row.is_active ? "O‘chirish" : "Yoqish"
+                }</button>`;
+          return `<tr>
+            <td>${row.id}</td>
+            <td>${row.username}</td>
+            <td>${role}</td>
+            <td>${row.done_count}</td>
+            <td>${st}</td>
+            <td>${btn}</td>
+          </tr>`;
+        })
+        .join("");
+      body.querySelectorAll("button[data-id]").forEach((b) => {
+        b.onclick = async () => {
+          await API.setActive(Number(b.dataset.id), b.dataset.active === "1");
+          loadUsers();
+        };
+      });
+    }
+
+    document.getElementById("create-form").onsubmit = async (e) => {
+      e.preventDefault();
+      msg.className = "msg";
+      msg.textContent = "";
+      try {
+        await API.createUser(
+          document.getElementById("new-user").value.trim(),
+          document.getElementById("new-pass").value
+        );
+        msg.className = "msg ok";
+        msg.textContent = "Foydalanuvchi ochildi";
+        e.target.reset();
+        loadUsers();
+      } catch (ex) {
+        msg.className = "msg err";
+        msg.textContent = ex.message || "Xato";
+      }
+    };
+
+    loadUsers().catch((ex) => {
+      msg.className = "msg err";
+      msg.textContent = ex.message;
+      if (ex.status === 401 || ex.status === 403) location.href = "/login";
+    });
+  </script>
+</body>
+</html>
