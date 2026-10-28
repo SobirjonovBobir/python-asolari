@@ -389,7 +389,12 @@ if not s.startswith("http"):
                 ex(title="1..10", task="n 1..10 → bor. (10)", checks=stdout("bor"), stdin="10"),
                 ex(title="Max 3", task="Uch int max. (3,9,4→9)", checks=stdout("9"), stdin="3\n9\n4"),
                 ex(title="Baholash", task="90A 70B 60C else D. (60→C)", checks=stdout("C"), stdin="60"),
-                ex(title="Kabisa", task="yil%4==0 → kabisa-oddiy. (2024)", checks=stdout("kabisa-oddiy"), stdin="2024"),
+                ex(
+                    title="Kabisa",
+                    task="yil=int(input()); agar yil%4==0: print('kabisa') else print('oddiy') — 2024",
+                    checks=stdout("kabisa"),
+                    stdin="2024",
+                ),
                 ex(title="!= sonlar", task="a,b=int,int; agar a!=b: print('farq') else print('teng') — 3\\n5", checks=stdout("farq"), stdin="3\n5"),
                 ex(title="not in g‘oya", task='s="salom"; agar "x" not in s: print("yoq")', checks=stdout("yoq")),
                 ex(title="Murakkab", task='ball=int(input()); agar ball!=0 and ball>=60: print("otdi") else print("qoldi") — 60', checks=stdout("otdi"), stdin="60"),

@@ -8,3 +8,5 @@ backend/.venv/
 pgdata/
 python_course.db
 *.db
+tools/cloudflared.exe
+tools/*.exe

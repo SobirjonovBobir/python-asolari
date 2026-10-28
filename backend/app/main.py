@@ -36,6 +36,11 @@ def seed_admin() -> None:
     try:
         existing = db.query(User).filter(User.username == settings.admin_username).first()
         if existing:
+            # .env dagi parol o‘zgarsa — admin parolini yangilash
+            existing.password_hash = hash_password(settings.admin_password)
+            existing.is_active = True
+            existing.role = "admin"
+            db.commit()
             return
         db.add(
             User(

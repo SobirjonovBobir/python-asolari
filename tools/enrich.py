@@ -192,12 +192,67 @@ def _codeish_from_task(task):
     """Vazifa matnidan kodga o‘xshash qismni ajratadi (→ dan oldin)."""
     if not task:
         return None
-    semi = _semicolon_python(task)
+    t = re.sub(r"\s*→\s*.+$", "", task.strip(), flags=re.DOTALL).strip().rstrip(".")
+    # «yoki sorted» kabi izohlarni olib tashlash
+    t = re.sub(r"\s+yoki\s+sorted\s*$", "", t, flags=re.I).strip()
+    semi = _semicolon_python(t)
     if semi:
         return semi
-    norm = _normalize_assign_print(task)
+    norm = _normalize_assign_print(t)
     if norm:
         return norm
+    # To‘liq print(...) ifodasi — eng ishonchli yechim
+    if re.match(r"^print\s*\(.+\)\s*$", t, re.S) and _looks_like_python(t):
+        return t
+    # try/except bloki
+    if t.startswith("try:") and _looks_like_python(t.replace("\\n", "\n")):
+        return t.replace("\\n", "\n")
+    # Bitta qatorli amal: sorted(...), math.sqrt(...), fabs(...), ...
+    if re.match(r"^[\w.]+\([^)]*\)(\.\w+)?\s*$", t):
+        expr = t
+        # date(2026,1,1).year
+        code = f"print({expr})"
+        imports = []
+        if re.search(r"\bmath\.|sqrt|ceil|floor|fabs|hypot|factorial|gcd|comb|isqrt|prod|log|trunc|degrees", expr):
+            if "import math" not in code:
+                imports.append("import math")
+            # sqrt without math. prefix
+            for fn in ("sqrt", "ceil", "floor", "fabs", "hypot", "factorial", "gcd", "comb", "isqrt", "prod", "trunc", "degrees"):
+                if re.search(rf"\b{fn}\s*\(", expr) and f"math.{fn}" not in expr:
+                    expr = re.sub(rf"\b{fn}\s*\(", f"math.{fn}(", expr)
+                    code = f"print({expr})"
+            if re.search(r"\blog10\s*\(|\blog\s*\(", expr) and "math.log" not in expr:
+                expr = re.sub(r"\blog10\s*\(", "math.log10(", expr)
+                expr = re.sub(r"\blog\s*\(", "math.log(", expr)
+                code = f"print({expr})"
+        if re.search(r"\brandint\b|\bseed\b|\bsample\b|\bchoice\b|\brandrange\b", expr):
+            imports.append("from random import seed, randint, sample, choice, randrange")
+        if re.search(r"\bdate\b|\bdatetime\b|\btimedelta\b", expr):
+            imports.append("from datetime import date, datetime, timedelta")
+        if _looks_like_python(code):
+            return ("\n".join(imports) + "\n" + code).strip() if imports else code
+    # [1,2,3,4][0:2] slice
+    m = re.match(r"^(\[[^\]]*\])(\[[^\]]+\])\s*$", t)
+    if m:
+        return f"a = {m.group(1)}\nprint(a{m.group(2)})"
+    # [1,2]+[3]
+    m = re.match(r"^(\[[^\]]*\])\s*\+\s*(\[[^\]]*\])\s*$", t)
+    if m:
+        return f"print({m.group(1)} + {m.group(2)})"
+    # list comprehension
+    if re.match(r"^\[.+\s+for\s+.+\s+in\s+.+\]\s*$", t) and _looks_like_python(f"print({t})"):
+        return f"print({t})"
+    # {1,2}.add(3) / [1].extend([2,3]) / .pop() / .reverse() / .clear()
+    m = re.match(
+        r"^(\{[^}]+\}|\[[^\]]*\])\.(add|append|remove|discard|clear|sort|pop|reverse|extend|insert)\(([^)]*)\)",
+        t,
+    )
+    if m and "sorted" in t.lower():
+        base, meth, arg = m.group(1), m.group(2), m.group(3)
+        return f"s = {base}\ns.{meth}({arg})\nprint(sorted(s))"
+    if m:
+        base, meth, arg = m.group(1), m.group(2), m.group(3)
+        return f"a = {base}\na.{meth}({arg})\nprint(a)"
     return None
 
 
@@ -526,6 +581,12 @@ def _stdout_solution(ex, exp, title, task, stdin, setup):
         # True/False
         if exp in ("True", "False"):
             return _bool_stdout_solution(task, title, exp, stdin)
+        # Ro‘yxat/lug‘at ko‘rinishidagi natijani matn qilib yozish — yechim emas
+        if re.match(r"^[\[\{].*[\]\}]$", exp.strip()):
+            codeish = _codeish_from_task(task)
+            if codeish:
+                return codeish
+            return None
         return f"matn = {_py_str(exp)}\nprint(matn)"
 
     if isinstance(exp, str) and "\n" in exp:
@@ -859,47 +920,60 @@ HAND_FIXES = {
 
 
 def enrich_exercise(ex):
-    from polish import polish_exercise
+    from clarify_tasks import SOL_FIXES, clarify_exercise, _is_cheat_solution
 
     exp = _stdout_eq(ex)
     eid = ex.get("id", "")
-    # Avval yechim — asl vazifa matnidan (keyin savol yumshatiladi)
     raw_task = ex.get("task") or ""
-    ex["task"] = clean_task(raw_task, exp)
-    if eid in HAND_FIXES:
+    ex["_raw_task"] = raw_task
+
+    # Yechimni FAQAT asl (kod) vazifadan yasash
+    tmp = dict(ex)
+    tmp["task"] = raw_task
+    if eid in SOL_FIXES:
+        sol = SOL_FIXES[eid]
+    elif eid in HAND_FIXES:
         sol = HAND_FIXES[eid]
     else:
-        sol = invent_solution(ex)
-    if re.search(r"\b(bering|saqlang|chiqaring|keyin|ga |ni )\b", sol) and "def " not in sol:
-        if eid in HAND_FIXES:
-            sol = HAND_FIXES[eid]
-        else:
-            tmp = dict(ex)
-            tmp["solution"] = ""
-            if re.search(r"\b(bering|saqlang|chiqaring)\b", tmp.get("hint") or ""):
-                tmp["hint"] = ""
-            sol2 = invent_solution(tmp)
-            if not re.search(r"\b(bering|saqlang|chiqaring|keyin)\b", sol2):
-                sol = sol2
+        sol = invent_solution(tmp)
+        codeish = _codeish_from_task(raw_task)
+        if codeish and (_is_cheat_solution(sol) or not _looks_like_python(sol)):
+            sol = codeish
+        if re.search(r"\b(bering|saqlang|chiqaring|keyin)\b", sol) and "def " not in sol:
+            if codeish:
+                sol = codeish
             elif eid in HAND_FIXES:
                 sol = HAND_FIXES[eid]
+
+    # Oddiy print(10) / print("matn") — o‘zgaruvchi orqali (build qoidasi)
     if re.fullmatch(r"print\(-?\d+(\.\d+)?\)", sol.strip()):
-        num = sol.strip()[6:-1]
-        sol = f"natija = {num}\nprint(natija)"
+        if re.search(r"set|dict|json|map|filter|union|\||math", raw_task, re.I):
+            codeish = _codeish_from_task(raw_task)
+            if codeish:
+                sol = codeish
+        else:
+            num = sol.strip()[6:-1]
+            sol = f"natija = {num}\nprint(natija)"
     if re.fullmatch(r'print\("[^"]*"\)', sol.strip()) or re.fullmatch(r"print\('[^']*'\)", sol.strip()):
-        inner = sol.strip()[6:-1]
-        sol = f"matn = {inner}\nprint(matn)"
-    if "formulaga almashtiring" in sol or "o‘rniga hisob yozing" in sol:
-        if eid in HAND_FIXES:
-            sol = HAND_FIXES[eid]
+        if not re.search(r"json\.|dumps|loads", raw_task, re.I):
+            inner = sol.strip()[6:-1]
+            sol = f"matn = {inner}\nprint(matn)"
     if "json." in sol and "import json" not in sol:
         sol = "import json\n" + sol
-    if re.search(r"\brandint\b|\bseed\b", sol) and "import" not in sol:
-        sol = "from random import seed, randint\n" + sol
-    # UI uchun: spoiler sarlavha/savolni tozalash (yechimga tegmaydi)
+    if re.search(r"\brandint\b|\bseed\b|\bsample\b", sol) and "import" not in sol:
+        if "sample" in sol:
+            sol = "from random import sample\n" + sol
+        else:
+            sol = "from random import seed, randint\n" + sol
+
+    if eid in SOL_FIXES:
+        sol = SOL_FIXES[eid]
+
+    # Savolni insoniy qilish (yechimga tegmaydi)
     ex["task"] = raw_task
-    polish_exercise(ex)
+    clarify_exercise(ex, raw_task=raw_task)
     ex["solution"] = sol
+    ex.pop("_raw_task", None)
     return ex
 
 

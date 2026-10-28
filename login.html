@@ -3,8 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Kirish — Python asoslari</title>
+  <title>Kirish — Python Asoslari</title>
   <link rel="stylesheet" href="css/style.css" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("python-asolari-theme") || "light";
+        document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    })();
+  </script>
   <style>
     .auth-wrap {
       min-height: 100vh;
@@ -12,22 +20,29 @@
       place-items: center;
       padding: 24px;
       background:
-        radial-gradient(1200px 600px at 10% -10%, #d8efe8 0%, transparent 55%),
-        radial-gradient(900px 500px at 100% 0%, #e8f3ff 0%, transparent 50%),
+        radial-gradient(900px 480px at 10% -10%, rgba(16, 185, 129, 0.18) 0%, transparent 55%),
+        radial-gradient(800px 420px at 100% 0%, rgba(52, 211, 153, 0.1) 0%, transparent 50%),
         var(--bg);
     }
     .auth-card {
       width: min(420px, 100%);
-      background: var(--bg-2);
+      background: var(--bg-card);
       border: 1px solid var(--line);
       border-radius: 16px;
       padding: 28px 26px;
-      box-shadow: 0 12px 40px rgba(20, 40, 35, 0.08);
+      box-shadow: var(--shadow);
+    }
+    .auth-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
     }
     .auth-card h1 {
-      margin: 0 0 6px;
+      margin: 0;
       font-size: 22px;
       letter-spacing: -0.02em;
+      color: var(--ink);
     }
     .auth-card .sub {
       margin: 0 0 22px;
@@ -41,7 +56,8 @@
       color: var(--accent-2);
       font-weight: 600;
     }
-    .auth-card input {
+    .auth-card input[type="text"],
+    .auth-card input[type="password"] {
       width: 100%;
       box-sizing: border-box;
       border: 1px solid var(--line);
@@ -49,9 +65,49 @@
       padding: 11px 12px;
       font: inherit;
       margin-bottom: 14px;
-      background: #fff;
+      background: var(--input-bg);
+      color: var(--ink);
     }
-    .auth-card button {
+    .auth-card input:focus {
+      outline: 2px solid rgba(16, 185, 129, 0.45);
+      outline-offset: 1px;
+      border-color: var(--accent);
+    }
+    .pw-wrap {
+      position: relative;
+      margin-bottom: 14px;
+    }
+    .pw-wrap input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 11px 44px 11px 12px;
+      font: inherit;
+      margin-bottom: 0;
+      background: var(--input-bg);
+      color: var(--ink);
+    }
+    .pw-toggle {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 36px;
+      height: 36px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .pw-toggle:hover { background: var(--accent-soft); color: var(--accent-2); }
+    .auth-card button[type="submit"] {
       width: 100%;
       margin-top: 6px;
       border: 0;
@@ -59,56 +115,88 @@
       padding: 12px;
       font: inherit;
       font-weight: 650;
-      background: var(--accent);
+      background: linear-gradient(135deg, #10b981, #059669);
       color: #fff;
       cursor: pointer;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
     }
     .auth-err {
       display: none;
       margin: 0 0 12px;
       padding: 10px 12px;
       border-radius: 10px;
-      background: #fde8e8;
-      color: #8a1f1f;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: var(--bad);
       font-size: 13px;
     }
     .auth-err.show { display: block; }
-    .hint {
-      margin: 16px 0 0;
-      font-size: 12px;
-      color: var(--muted);
-      line-height: 1.45;
-    }
   </style>
 </head>
 <body>
   <div class="auth-wrap">
     <form class="auth-card" id="login-form">
-      <h1>Python asoslari</h1>
+      <div class="auth-brand">
+        <div class="brand-logo" aria-hidden="true">Py</div>
+        <h1>Python Asoslari</h1>
+      </div>
+      <div class="theme-toggle" style="margin:0 0 16px">
+        <span class="theme-toggle-label">Tungi rejim<small>Qorong‘i fon</small></span>
+        <label class="theme-switch">
+          <input type="checkbox" id="theme-toggle" aria-label="Tungi rejim" />
+          <span class="theme-slider"></span>
+        </label>
+      </div>
       <p class="sub">Hisob faqat admin tomonidan ochiladi. Login va parolingizni kiriting.</p>
       <div class="auth-err" id="err"></div>
       <label for="username">Login</label>
-      <input id="username" name="username" autocomplete="username" required />
+      <input id="username" name="username" type="text" autocomplete="username" required />
       <label for="password">Parol</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required />
+      <div class="pw-wrap">
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
+        <button type="button" class="pw-toggle" id="pw-toggle" aria-label="Parolni ko‘rsatish" aria-pressed="false" title="Ko‘rsatish / yashirish">👁</button>
+      </div>
       <button type="submit">Kirish</button>
-      <p class="hint">Admin birinchi marta: login <code>admin</code>, parol <code>admin123</code> (keyin .env da o‘zgartiring).</p>
     </form>
   </div>
   <script src="js/api.js"></script>
   <script>
+    (function initTheme() {
+      const KEY = "python-asolari-theme";
+      const mode = localStorage.getItem(KEY) || "light";
+      document.body.classList.add(mode === "dark" ? "theme-dark" : "theme-light");
+      const toggle = document.getElementById("theme-toggle");
+      if (toggle) {
+        toggle.checked = mode === "dark";
+        toggle.onchange = () => {
+          const dark = toggle.checked;
+          document.body.classList.remove("theme-light", "theme-dark");
+          document.body.classList.add(dark ? "theme-dark" : "theme-light");
+          localStorage.setItem(KEY, dark ? "dark" : "light");
+        };
+      }
+    })();
     if (API.token()) {
       const u = API.user();
       location.href = u && u.role === "admin" ? "/admin" : "/";
     }
     const err = document.getElementById("err");
+    const pw = document.getElementById("password");
+    const toggle = document.getElementById("pw-toggle");
+    toggle.onclick = () => {
+      const show = pw.type === "password";
+      pw.type = show ? "text" : "password";
+      toggle.setAttribute("aria-pressed", show ? "true" : "false");
+      toggle.setAttribute("aria-label", show ? "Parolni yashirish" : "Parolni ko‘rsatish");
+      toggle.textContent = show ? "🙈" : "👁";
+    };
     document.getElementById("login-form").onsubmit = async (e) => {
       e.preventDefault();
       err.classList.remove("show");
       try {
         const data = await API.login(
           document.getElementById("username").value.trim(),
-          document.getElementById("password").value
+          pw.value
         );
         API.setSession(data);
         location.href = data.role === "admin" ? "/admin" : "/";

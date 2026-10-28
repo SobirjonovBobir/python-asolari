@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     secret_key: str = "dev-change-me-in-production-use-long-random-string"
     access_token_expire_minutes: int = 60 * 24 * 7  # 7 kun
     admin_username: str = "admin"
-    admin_password: str = "admin123"
+    admin_password: str = "Malr1ne"
     cors_origins: str = "*"
 
     def sqlalchemy_url(self) -> str:

@@ -94,9 +94,12 @@ const CodeEditor = (() => {
     }
 
     textarea.value = initialValue || "";
+    const themeName =
+      (typeof window !== "undefined" && window.__cmTheme) ||
+      (document.body.classList.contains("theme-dark") ? "material-darker" : "eclipse");
     cm = CodeMirror.fromTextArea(textarea, {
       mode: "python",
-      theme: "material-darker",
+      theme: themeName,
       lineNumbers: true,
       lineWrapping: true,
       indentUnit: 4,
@@ -158,5 +161,13 @@ const CodeEditor = (() => {
     }
   }
 
-  return { mount, getValue, setValue, destroy };
+  function setTheme(name) {
+    window.__cmTheme = name;
+    if (cm) {
+      cm.setOption("theme", name);
+      setTimeout(() => cm.refresh(), 20);
+    }
+  }
+
+  return { mount, getValue, setValue, destroy, setTheme };
 })();

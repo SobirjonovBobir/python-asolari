@@ -12,12 +12,6 @@ TITLE_FIXES = {
     "l7-e14": "Ikki append",
     "l7-e18": "Nollar ro‘yxati",
     "l7-e24": "Ro‘yxat ulash",
-    "l3-e05": "Salom va input",
-    "l3-e17": "f-string",
-    "l3-e22": "endswith va input",
-    "l3-e27": "count va len",
-    "l3-e28": "split va len",
-    "l3-e29": "ID yasash",
     "l5-e01": "Kattaroqmi",
     "l5-e02": "Tenglik",
     "l5-e03": "Teng emas",
@@ -63,34 +57,64 @@ TITLE_FIXES = {
 
 def _strip_result_hints(task, expected=None):
     t = task or ""
-    t = re.sub(r"\s*→\s*.+$", "", t, flags=re.DOTALL)
-    t = re.sub(r"\s+[—\-]\s+[^.\n]*→[^.\n]*", "", t)
-    t = re.sub(r"\s*→\s*(True|False|-?\d+(\.\d+)?)\b", "", t)
-    # "— banana" kabi stdin namunasi (javob emas) qolishi mumkin; natija ochiq bo‘lsa olib tashla
+    # Faqat OXIRDAGI natija strelkasi (masalan "… → 7"); "90+ → A, 70+ → B" kabi
+    # o‘quv matnidagi strelkalarni olib tashlamaymiz.
+    t = re.sub(
+        r"\s*→\s*(True|False|None|-?\d+(?:\.\d+)?|\[[^\]]*\]|\{[^}]*\}|\([^)]*\))\s*$",
+        "",
+        t,
+    )
+    t = re.sub(r"\s+[—\-]\s+\S+\s*→\s*\S+\s*$", "", t)
+    # Oxiridagi izoh qavslari: (2024), (5,2→2) — lekin print(2 in (1,2,3)) dagi tuple NI OLIB TASHLAMASLIK
     if expected is not None:
         exp = str(expected).strip().split("\n")[0]
 
-        def strip_paren(m):
+        def strip_hint_paren(m):
             inner = m.group(1).strip()
-            if exp and (exp in inner or inner == exp):
-                return ""
-            if re.search(r"[=→]", inner) and re.search(r"\d", inner):
+            if "→" in inner or "=" in inner:
                 return ""
             if re.fullmatch(r"-?\d+(\.\d+)?|True|False|None", inner):
                 return ""
-            # (5,2→2) tipidagi
-            if "→" in inner or re.search(r"\d+\s*,\s*\d+", inner) and re.search(r"\d", inner):
-                if re.search(r"→|=", inner) or re.fullmatch(r"[\d,\s→\-]+", inner):
-                    return ""
+            if exp and inner == exp:
+                return ""
             return m.group(0)
 
-        t = re.sub(r"\s*\(([^)]*)\)\s*\.?$", strip_paren, t)
+        # Faqat gap oxiridagi alohida izoh: "... (2024)" yoki "... (5→2)"
+        t = re.sub(
+            r"(?<=[\s.])\(([^)]*→[^)]*|True|False|None|-?\d+(?:\.\d+)?)\)\s*\.?$",
+            "",
+            t,
+        )
+        # Kod emas bo‘lsa — eski qoida (lekin "in (" / "print(" ichidagini saqlash)
+        if not re.search(r"(print\s*\(|\bin\s*\(|\w\s*\(\s*\[)", t):
+            t = re.sub(r"\s*\(([^)]*)\)\s*\.?$", strip_hint_paren, t)
     t = re.sub(r"\s{2,}", " ", t).strip(" .;")
     # Kod parchasiga nuqta qo‘yilmasin (n%2==0. bo‘lib ketmasin)
     if t and not t.endswith((".", "?", "!")):
         if not re.search(r"(==|!=|>=|<=|[%*/+]|\w+\s*=\s*\S+$)", t):
             t += "."
     return t
+
+
+def _extract_print_arg(task: str) -> str | None:
+    """print(...) ichidagi ifodani qavs muvozanati bilan ajratadi."""
+    t = (task or "").strip().rstrip(".")
+    m = re.match(r"^print\s*\(", t)
+    if not m:
+        return None
+    start = m.end()
+    depth = 1
+    i = start
+    while i < len(t) and depth:
+        ch = t[i]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        i += 1
+    if depth != 0:
+        return None
+    return t[start : i - 1].strip()
 
 
 def _is_code_dump(task):
@@ -254,11 +278,28 @@ def _humanize_code_task(task, title, exp):
     if ".insert(" in t or "insert" in title_l:
         return _strip_result_hints(task, exp)
 
-    # set / in
-    if " in {" in t or " in {" in t.replace(" ", ""):
-        return "To‘plamda element bor-yo‘qligini in bilan tekshirib print qiling."
+    # set / dict / in
+    m = re.search(r'(["\']?\w+["\']?)\s+in\s+(\{[^}]+\})', t)
+    if m:
+        needle, container = m.group(1), m.group(2)
+        if ":" in container:
+            return (
+                f"d ga {container} bering. {needle} kaliti lug‘atda bor-yo‘qligini "
+                "in bilan tekshirib print qiling."
+            )
+        return (
+            f"s ga {container} bering. {needle} elementi to‘plamda bor-yo‘qligini "
+            "in bilan tekshirib print qiling."
+        )
     if "len(set(" in t.replace(" ", ""):
         return "Ro‘yxatdan set yasang va unikal elementlar sonini chiqaring."
+    if ".items()" in t:
+        m = re.search(r"(\{[^}]+\})", t)
+        dlit = m.group(1) if m else '{"a": 1}'
+        return (
+            f"d ga {dlit} bering. for k, v in d.items() bilan kalit va qiymatni "
+            "alohida qatorda print qiling."
+        )
 
     # math / import
     for name, tip in (
@@ -307,33 +348,94 @@ def _humanize_code_task(task, title, exp):
     if "r+" in title_l or (title_l.startswith("r+") or "r+ " in t):
         return "x.txt da Hi bor. r+ rejimida o‘qing, seek(0), keyin YANGI yozing."
 
-    # print(EXPR) — ifodani ochiq kod sifatida qoldirmaslik
-    m = re.match(r"^print\s*\((.*)\)\s*$", t.strip().rstrip("."))
-    if m:
-        expr = m.group(1).strip()
+    # print(EXPR) — ifodani to‘liq (qavs muvozanati bilan) ajratish
+    expr = _extract_print_arg(t)
+    if expr is not None:
         if re.fullmatch(r"\[\s*0\s*\]\s*\*\s*3", expr.replace(" ", "")) or "[0]*3" in expr.replace(" ", ""):
             return "Uchta noldan iborat ro‘yxat yarating (* yoki takrorlash bilan) va print qiling."
         if "tuple(" in expr:
-            return "Ro‘yxatni tuple() ga o‘tkazib print qiling."
+            return f"tuple() ga o‘tkazib natijani print qiling. Ifoda: {expr}."
         if "set(" in expr and "sorted" in expr:
-            return "Ro‘yxatdan set yasab, sorted qilib print qiling."
-        if "|" in expr and "{" in expr:
-            return "Ikki to‘plamni birlashtiring (union), sorted qilib print qiling."
-        if "&" in expr and "{" in expr:
-            return "Ikki to‘plam kesishmasini (intersection) sorted qilib print qiling."
-        if "^" in expr and "{" in expr:
-            return "Symmetric difference ni sorted qilib print qiling."
-        if "-" in expr and "{" in expr and "sorted" in expr:
-            return "To‘plamlar ayirmasini (difference) sorted qilib print qiling."
+            return f"Ro‘yxatdan set yasab, sorted qilib print qiling. Ifoda: {expr}."
+        braces = re.findall(r"\{[^{}]*\}", expr)
+        # Lug‘at merge: (...|...)[kalit]
+        if "|" in expr and braces and re.search(r"\)\s*\[", expr):
+            a = braces[0] if braces else "{...}"
+            b = braces[1] if len(braces) > 1 else "{...}"
+            key_m = re.search(r"\[\s*([\"'][^\"']+[\"']|\w+)\s*\]\s*$", expr)
+            key = key_m.group(1) if key_m else "kerakli kalit"
+            return (
+                f"Ikki lug‘atni | operatori bilan birlashtiring: {a} va {b}. "
+                f"Natijadan {key} qiymatini print qiling."
+            )
+        if "|" in expr and braces and len(braces) >= 2:
+            return (
+                f"{braces[0]} va {braces[1]} to‘plamlarini birlashtiring (| yoki union), "
+                f"sorted qilib print qiling."
+            )
+        if "&" in expr and braces and len(braces) >= 2:
+            return (
+                f"{braces[0]} va {braces[1]} to‘plamlarining kesishmasini (intersection / &), "
+                f"sorted qilib print qiling."
+            )
+        if "^" in expr and braces and len(braces) >= 2:
+            return (
+                f"{braces[0]} va {braces[1]} uchun symmetric difference (^) hisoblang, "
+                f"sorted qilib print qiling."
+            )
+        if re.search(r"\}\s*-\s*\{", expr) or (
+            "-" in expr and braces and len(braces) >= 2 and "sorted" in expr
+        ):
+            if len(braces) >= 2:
+                return (
+                    f"{braces[0]} dan {braces[1]} elementlarini ayiring (difference), "
+                    f"sorted qilib print qiling."
+                )
         if ".issubset(" in expr:
-            return "issubset bilan tekshirib, natijani print qiling."
+            m = re.search(r"(\{[^}]*\})\.issubset\((\{[^}]*\})\)", expr)
+            if m:
+                return f"{m.group(1)} to‘plami {m.group(2)} ichida joylashganmi — issubset bilan tekshirib print qiling."
+            return "issubset bilan tekshirib, natijani (True/False) print qiling."
         if ".issuperset(" in expr:
-            return "issuperset bilan tekshirib, natijani print qiling."
-        if re.search(r"\bin\b", expr) and "(" in expr:
-            return "Tuple ichida element bor-yo‘qligini in bilan tekshirib print qiling."
+            m = re.search(r"(\{[^}]*\})\.issuperset\((\{[^}]*\})\)", expr)
+            if m:
+                return f"{m.group(1)} to‘plami {m.group(2)} ni qamrab oladimi — issuperset bilan tekshirib print qiling."
+            return "issuperset bilan tekshirib, natijani (True/False) print qiling."
+        # in — to‘liq ifoda bilan
+        m_in = re.match(r"^(.+?)\s+in\s+(.+)$", expr)
+        if m_in:
+            needle, container = m_in.group(1).strip(), m_in.group(2).strip()
+            kind = "tuple" if container.startswith("(") else (
+                "to‘plam" if container.startswith("{") else (
+                    "ro‘yxat" if container.startswith("[") else "ketma-ketlik"
+                )
+            )
+            return (
+                f"{needle} elementi {container} {kind}ida bormi — "
+                f"in operatori bilan tekshirib print qiling (True yoki False)."
+            )
+        if "json." in expr:
+            if "sort_keys" in expr:
+                m = re.search(r"dumps\((.+),\s*sort_keys\s*=\s*True\)", expr)
+                obj = m.group(1).strip() if m else "{'b': 1, 'a': 2}"
+                return (
+                    f"import json. {obj} lug‘atini dumps qiling; "
+                    f"kalitlar alifbo tartibida chiqishi uchun sort_keys=True bering. Natijani print qiling."
+                )
+            if "loads" in expr:
+                return f"import json. JSON matnini loads qilib kerakli qiymatni oling. Ifoda: {expr}."
+            if "dumps" in expr:
+                return f"import json. Python obyektini dumps qilib print qiling. Ifoda: {expr}."
         if re.search(r"math\.|sqrt|ceil|floor|fabs|pow|hypot|gcd|factorial", expr):
-            return f"Kutubxona chaqirig‘i natijasini hisoblab print qiling (darsdagi misolga qarang)."
-        return "Kerakli ifodani hisoblab, natijani print qiling."
+            return f"Kerakli math funksiyasini chaqirib natijani print qiling. Ifoda: {expr}."
+        if ".keys()" in expr:
+            return f"Lug‘at kalitlarini oling (sorted kerak bo‘lsa sorted qiling) va print qiling. Ifoda: {expr}."
+        if ".values()" in expr:
+            return f"Lug‘at qiymatlarini olib print qiling. Ifoda: {expr}."
+        if "dict.fromkeys" in expr:
+            return f"dict.fromkeys yordamida lug‘at yarating va print qiling: {expr}."
+        # Oxirgi variant — to‘liq ifodani ko‘rsatish
+        return f"Quyidagi ifodaning natijasini hisoblab print qiling: {expr}."
 
     # Yumshatish: to‘liq yechimni saqlamaslik
     if t.count(";") >= 1 and re.search(r"\bprint\s*\(", t):

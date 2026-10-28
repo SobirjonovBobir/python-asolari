@@ -24,7 +24,7 @@ Yoki `server.bat` ni oching.
 
 Brauzer: http://127.0.0.1:8000/
 
-- Login: `admin` / `admin123`
+- Login: `admin` / `Malr1ne`
 - Admin: http://127.0.0.1:8000/admin — yangi o‘quvchi ochish
 - Kurs: http://127.0.0.1:8000/
 
@@ -40,17 +40,20 @@ docker compose up -d db
 DATABASE_URL=postgresql+psycopg://python:python@localhost:5432/python_course
 ```
 
-## Bepul deploy (Neon + Render)
+## Bepul ochiq URL (hozir — Cloudflare Tunnel)
 
-1. **Neon**: loyiha → Postgres `DATABASE_URL` (`postgresql://...`)
-2. **Render**: Web Service
-   - Build: `pip install -r backend/requirements-postgres.txt`
-   - Start: `uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT`
-   - Env:
-     - `DATABASE_URL` = Neon URL (oddiy `postgresql://` ham bo‘ladi — kod o‘zi `psycopg` ga moslaydi)
-     - `SECRET_KEY` = uzun random
-     - `ADMIN_USERNAME` / `ADMIN_PASSWORD`
-3. `/login` → admin → `/admin` da foydalanuvchi oching.
+1. `server.bat` (port 8000) ishlayotgan bo‘lsin
+2. `deploy-tunnel.bat` ni oching — terminalda `https://….trycloudflare.com` chiqadi
+3. Shu linkni boshqalarga yuboring (kompyuter yoqilgan + tunnel ochiq bo‘lishi kerak)
+
+## Doimiy bepul hosting (Render)
+
+1. Loyihani GitHub ga yuklang
+2. [Render Blueprint](https://dashboard.render.com/select-repo?type=blueprint) → repo tanlang (`render.yaml`)
+3. Free Web + Free Postgres (30 kun) deploy bo‘ladi
+4. Login: `admin` / `Malr1ne` (kerak bo‘lsa .env da almashtiring)
+
+Alternativa: Neon Postgres + Render Web Service — `DATABASE_URL`, `SECRET_KEY`, `ADMIN_*` env.
 
 ## API qisqacha
 

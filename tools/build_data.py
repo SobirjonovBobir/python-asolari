@@ -11,9 +11,17 @@ from lessons_early import lessons as early
 from lessons_late import lessons as late
 from enrich import enrich_lessons
 from lesson_content import apply_rich_content
+from expand_teach import expand_lessons
+from clarify_tasks import clarify_lessons
+from teach_outputs import annotate_lessons
+from apply_balanced import apply_balanced
 
 lessons = apply_rich_content(early() + late())
+lessons = apply_balanced(lessons)
 lessons = enrich_lessons(lessons)
+lessons = clarify_lessons(lessons)
+lessons = expand_lessons(lessons)
+lessons = annotate_lessons(lessons)
 
 assert len(lessons) == 16, len(lessons)
 bad_answers = []
